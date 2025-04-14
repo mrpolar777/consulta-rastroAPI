@@ -119,8 +119,8 @@ if st.sidebar.button("Gerar Relatório"):
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                         df.to_excel(writer, index=False, sheet_name='Relatório')
-                        writer.save()
-                        xlsx_data = output.getvalue()
+                    output.seek(0)
+                    xlsx_data = output.getvalue()
 
                     st.download_button(
                         label="📥 Baixar Excel",
