@@ -31,7 +31,7 @@ km_por_litro = st.sidebar.number_input("Km/L", min_value=0.1, value=10.0, step=0
 preco_combustivel = st.sidebar.number_input("Preço do Litro (R$)", min_value=0.1, value=5.0, step=0.1)
 
 if st.sidebar.button("Gerar Relatório"):
-    login_url = "http://rastrosystem.rastrosystem.com.br/api_v2/login/"
+    login_url = "http://teresinagps.rastrosystem.com.br/api_v2/login/"
     login_data = {"login": username, "senha": password, "app": app_number}
     with st.spinner("Fazendo login..."):
         login_response = requests.post(login_url, data=login_data)
@@ -44,7 +44,7 @@ if st.sidebar.button("Gerar Relatório"):
             st.error("Token não retornado.")
         else:
             usuario_id = user_id if user_id.strip() != "" else str(login_json.get("id"))
-            veiculos_url = f"http://rastrosystem.rastrosystem.com.br/api_v2/veiculos/{usuario_id}/"
+            veiculos_url = f"http://teresinagps.rastrosystem.com.br/api_v2/veiculos/{usuario_id}/"
             headers = {"Authorization": f"token {token}"}
             veiculos_resp = requests.get(veiculos_url, headers=headers)
             if veiculos_resp.status_code != 200:
@@ -60,7 +60,7 @@ if st.sidebar.button("Gerar Relatório"):
                     for dispositivo in dispositivos:
                         vehicle_name = dispositivo.get("name", "Sem Nome")
                         vehicle_id = dispositivo.get("veiculo_id")
-                        historico_url = "http://rastrosystem.rastrosystem.com.br/api_v2/veiculo/historico/"
+                        historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                         historico_data = {
                             "data": date_str,
                             "hora_ini": hora_ini,
