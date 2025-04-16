@@ -4,6 +4,7 @@ import datetime
 import math
 import pandas as pd
 import io
+import time
 
 # Função Haversine
 def haversine(lon1, lat1, lon2, lat2):
@@ -27,8 +28,8 @@ st.sidebar.header("Configurações do Relatório")
 date_input = st.sidebar.date_input("Data", datetime.date.today())
 hora_ini = st.sidebar.text_input("Hora Início", "00:00:00")
 hora_fim = st.sidebar.text_input("Hora Fim", "23:59:59")
-km_por_litro = st.sidebar.number_input("Km/L", min_value=0.1, value=10.0, step=0.1)
-preco_combustivel = st.sidebar.number_input("Preço do Litro (R$)", min_value=0.1, value=5.0, step=0.1)
+km_por_litro = st.sidebar.number_input("Km/L", min_value=0.1, value=3.0, step=0.1)
+preco_combustivel = st.sidebar.number_input("Preço do Litro (R$)", min_value=0.1, value=7.0, step=0.1)
 
 if st.sidebar.button("Gerar Relatório"):
     login_url = "http://teresinagps.rastrosystem.com.br/api_v2/login/"
@@ -57,8 +58,14 @@ if st.sidebar.button("Gerar Relatório"):
                     resultados = []
                     date_str = date_input.strftime("%d/%m/%Y")
 
-                    for dispositivo in dispositivos:
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+
+                    total = len(dispositivos)
+                    for idx, dispositivo in enumerate(dispositivos):
                         vehicle_name = dispositivo.get("name", "Sem Nome")
+                        status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
+
                         vehicle_id = dispositivo.get("veiculo_id")
                         historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                         historico_data = {
@@ -78,6 +85,7 @@ if st.sidebar.button("Gerar Relatório"):
                                 "Distância (km)": 0,
                                 "Tempo": "00:00:00",
                                 "Velocidade Média (km/h)": 0,
+                                "Velocidade Máxima (km/h)": 0,
                                 "Km/L": km_por_litro,
                                 "Consumo (L)": 0,
                                 "Custo (R$)": 0
@@ -100,6 +108,7 @@ if st.sidebar.button("Gerar Relatório"):
                             total_time = registros[-1]["dt"] - registros[0]["dt"]
                             velocidades = [float(r.get("velocidade", 0)) for r in registros]
                             velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
+                            velocidade_maxima = max(velocidades) if velocidades else 0
                             consumo_litros = total_distance / km_por_litro if km_por_litro > 0 else 0
                             custo = consumo_litros * preco_combustivel
 
@@ -108,13 +117,31 @@ if st.sidebar.button("Gerar Relatório"):
                                 "Distância (km)": round(total_distance, 2),
                                 "Tempo": str(total_time),
                                 "Velocidade Média (km/h)": velocidade_media,
+                                "Velocidade Máxima (km/h)": velocidade_maxima,
                                 "Km/L": km_por_litro,
                                 "Consumo (L)": round(consumo_litros, 2),
                                 "Custo (R$)": round(custo, 2)
                             })
 
+                        # Atualiza barra de progresso
+                        progress_bar.progress((idx + 1) / total)
+
+                    status_text.text("Relatório finalizado com sucesso!")
+
                     df = pd.DataFrame(resultados)
-                    st.write("### Relatório Gerado", df)
+                    colunas_ordenadas = [
+                        "Veículo",
+                        "Distância (km)",
+                        "Tempo",
+                        "Velocidade Média (km/h)",
+                        "Velocidade Máxima (km/h)",
+                        "Km/L",
+                        "Consumo (L)",
+                        "Custo (R$)"
+                    ]
+                    df = df[colunas_ordenadas]
+
+                    st.write("Relatório Gerado com Sucesso", df)
 
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
@@ -123,7 +150,7 @@ if st.sidebar.button("Gerar Relatório"):
                     xlsx_data = output.getvalue()
 
                     st.download_button(
-                        label="📥 Baixar Excel",
+                        label="Baixar Excel",
                         data=xlsx_data,
                         file_name="relatorio_veiculos.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
