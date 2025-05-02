@@ -19,7 +19,7 @@ st.title("Relatório de Veículos - Rastro System")
 st.sidebar.header("Credenciais API")
 username = st.sidebar.text_input("Login")
 password = st.sidebar.text_input("Senha", type="password")
-user_id = st.sidebar.text_input("ID do Usuário (opcional)", value="")
+user_id = st.sidebar.text_input("ID do Usuário (obrigatório)", value="")
 app_number = 4
 
 st.sidebar.header("Configurações do Relatório")
@@ -43,7 +43,11 @@ if st.sidebar.button("Gerar Relatório"):
         if not token:
             st.error("Token não retornado.")
         else:
-            usuario_id = user_id if user_id.strip() != "" else str(login_json.get("id"))
+            usuario_id = user_id.strip()
+            if not usuario_id:
+                st.error("ID do Usuário é obrigatório para buscar notificações.")
+                st.stop()
+
             veiculos_url = f"http://teresinagps.rastrosystem.com.br/api_v2/veiculos/{usuario_id}/"
             headers = {"Authorization": f"token {token}"}
             veiculos_resp = requests.get(veiculos_url, headers=headers)
@@ -56,21 +60,21 @@ if st.sidebar.button("Gerar Relatório"):
                     st.warning("Nenhum veículo encontrado.")
                 else:
                     resultados = []
-                    date_str = date_input.strftime("%d/%m/%Y")
-
+                    data_consulta = date_input.strftime("%Y-%m-%d")
                     progress_bar = st.progress(0)
                     status_text = st.empty()
 
                     total = len(dispositivos)
                     for idx, dispositivo in enumerate(dispositivos):
                         vehicle_name = dispositivo.get("name", "Sem Nome")
+                        placa = dispositivo.get("placa", "")
                         vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
-                        # HISTÓRICO PARA DISTÂNCIA
+                        # 1. BUSCAR HISTÓRICO PARA DISTÂNCIA
                         historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                         historico_data = {
-                            "data": date_str,
+                            "data": date_input.strftime("%d/%m/%Y"),
                             "hora_ini": hora_ini,
                             "hora_fim": hora_fim,
                             "veiculo": vehicle_id
@@ -101,34 +105,32 @@ if st.sidebar.button("Gerar Relatório"):
                                 velocidades.append(vel)
                                 velocidade_maxima = max(velocidade_maxima, vel)
 
-                        # ALERTAS PARA TEMPO LIGADO
-                        alertas_url = "http://teresinagps.rastrosystem.com.br/api_v2/get-alertas/"
-                        alertas_data = {"veiculo_id": vehicle_id}
-                        alertas_resp = requests.post(alertas_url, headers=headers, json=alertas_data)
+                        # 2. BUSCAR NOTIFICAÇÕES PARA TEMPO LIGADO
+                        notificacoes_url = f"http://teresinagps.rastrosystem.com.br/api_v2/get-user-notifications/{usuario_id}"
+                        notificacoes_resp = requests.get(notificacoes_url, headers=headers)
 
                         tempo_ignicao_ligada = datetime.timedelta()
-                        if alertas_resp.status_code == 200:
-                            alertas = alertas_resp.json().get("alertas", [])
-                            alertas_ign = [a for a in alertas if a.get("new_type") in ("acc_on", "acc_off")]
-
-                            # Ordenar por data de criação
-                            alertas_ign.sort(key=lambda x: x["criado"])
+                        if notificacoes_resp.status_code == 200:
+                            eventos = notificacoes_resp.json()
+                            eventos_placa = [e for e in eventos if placa in e.get("title", "") and "ignição" in e.get("title", "").lower()]
+                            eventos_placa.sort(key=lambda x: x["criado"])
 
                             acc_on = None
-                            for alerta in alertas_ign:
-                                tipo = alerta.get("new_type")
-                                data = alerta.get("criado")
-
+                            for ev in eventos_placa:
+                                msg = ev.get("message", "").lower()
+                                data = ev.get("criado")
                                 try:
                                     dt = datetime.datetime.fromisoformat(data.replace("Z", "+00:00"))
                                 except:
                                     continue
 
-                                if tipo == "acc_on":
+                                if dt.date() != date_input:
+                                    continue
+
+                                if "ligada" in msg:
                                     acc_on = dt
-                                elif tipo == "acc_off" and acc_on:
-                                    if acc_on.date() == date_input:
-                                        tempo_ignicao_ligada += dt - acc_on
+                                elif "desligada" in msg and acc_on:
+                                    tempo_ignicao_ligada += dt - acc_on
                                     acc_on = None
 
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
