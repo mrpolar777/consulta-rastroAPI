@@ -108,8 +108,9 @@ if st.sidebar.button("Gerar Relatório"):
                                 lat1, lon1 = float(prev["latitude"]), float(prev["longitude"])
                                 lat2, lon2 = float(curr["latitude"]), float(curr["longitude"])
 
-                                ign_prev = prev.get("attributes", {}).get("ignition", False)
-                                ign_curr = curr.get("attributes", {}).get("ignition", False)
+                                # Tratar ignition como string ou boolean
+                                ign_prev = str(prev.get("attributes", {}).get("ignition", "false")).lower() == "true"
+                                ign_curr = str(curr.get("attributes", {}).get("ignition", "false")).lower() == "true"
 
                                 if ign_prev:
                                     total_distance += haversine(lon1, lat1, lon2, lat2)
