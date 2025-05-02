@@ -101,33 +101,25 @@ if st.sidebar.button("Gerar Relatório"):
                             tempo_ignicao_ligada = datetime.timedelta()
                             velocidades = []
                             velocidade_maxima = 0
-                            tempo_inicio_ignicao = None
 
                             for i in range(1, len(registros)):
-                                prev, curr = registros[i - 1], registros[i]
+                                prev = registros[i - 1]
+                                curr = registros[i]
+
                                 lat1, lon1 = float(prev["latitude"]), float(prev["longitude"])
                                 lat2, lon2 = float(curr["latitude"]), float(curr["longitude"])
 
-                                # Tratar ignition como string ou boolean
+                                # Verificações de ignição (tratando como string ou bool)
                                 ign_prev = str(prev.get("attributes", {}).get("ignition", "false")).lower() == "true"
                                 ign_curr = str(curr.get("attributes", {}).get("ignition", "false")).lower() == "true"
 
-                                if ign_prev:
+                                # Tempo entre dois pontos com ignição ligada
+                                if ign_prev and ign_curr and curr["dt"] > prev["dt"]:
+                                    tempo_ignicao_ligada += curr["dt"] - prev["dt"]
                                     total_distance += haversine(lon1, lat1, lon2, lat2)
-
-                                if ign_curr:
                                     vel = float(curr.get("velocidade", 0))
                                     velocidades.append(vel)
                                     velocidade_maxima = max(velocidade_maxima, vel)
-
-                                if not ign_prev and ign_curr:
-                                    tempo_inicio_ignicao = curr["dt"]
-                                elif ign_prev and not ign_curr and tempo_inicio_ignicao:
-                                    tempo_ignicao_ligada += curr["dt"] - tempo_inicio_ignicao
-                                    tempo_inicio_ignicao = None
-
-                            if tempo_inicio_ignicao:
-                                tempo_ignicao_ligada += registros[-1]["dt"] - tempo_inicio_ignicao
 
                             velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
                             consumo_litros = total_distance / km_por_litro if km_por_litro > 0 else 0
