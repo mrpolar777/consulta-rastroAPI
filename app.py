@@ -9,7 +9,7 @@ def haversine(lon1, lat1, lon2, lat2):
     R = 6371
     dlon = math.radians(lon2 - lon1)
     dlat = math.radians(lat2 - lat1)
-    a = math.sin(dlat / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2) ** 2
+    a = math.sin(dlat / 2)**2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2)**2
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
@@ -34,6 +34,7 @@ if st.sidebar.button("Gerar Relatório"):
     login_data = {"login": username, "senha": password, "app": app_number}
     with st.spinner("Fazendo login..."):
         login_response = requests.post(login_url, data=login_data)
+
     if login_response.status_code != 200:
         st.error("Erro no login.")
     else:
@@ -46,6 +47,7 @@ if st.sidebar.button("Gerar Relatório"):
             veiculos_url = f"http://teresinagps.rastrosystem.com.br/api_v2/veiculos/{usuario_id}/"
             headers = {"Authorization": f"token {token}"}
             veiculos_resp = requests.get(veiculos_url, headers=headers)
+
             if veiculos_resp.status_code != 200:
                 st.error("Erro ao obter veículos.")
             else:
@@ -62,9 +64,10 @@ if st.sidebar.button("Gerar Relatório"):
                     total = len(dispositivos)
                     for idx, dispositivo in enumerate(dispositivos):
                         vehicle_name = dispositivo.get("name", "Sem Nome")
+                        vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
-                        vehicle_id = dispositivo.get("veiculo_id")
+                        # HISTÓRICO PARA DISTÂNCIA
                         historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                         historico_data = {
                             "data": date_str,
@@ -73,68 +76,75 @@ if st.sidebar.button("Gerar Relatório"):
                             "veiculo": vehicle_id
                         }
                         historico_resp = requests.post(historico_url, headers=headers, json=historico_data)
-                        if historico_resp.status_code != 200:
-                            st.warning(f"Erro ao obter histórico de {vehicle_name}")
-                            continue
-                        registros = historico_resp.json().get("veiculos", [])
-                        if not registros:
-                            resultados.append({
-                                "Veículo": vehicle_name,
-                                "Distância (km)": 0,
-                                "Tempo": "00:00:00",
-                                "Velocidade Média (km/h)": 0,
-                                "Velocidade Máxima (km/h)": 0,
-                                "Km/L": km_por_litro,
-                                "Consumo (L)": 0,
-                                "Custo (R$)": 0
-                            })
-                        else:
+
+                        total_distance = 0
+                        velocidades = []
+                        velocidade_maxima = 0
+
+                        if historico_resp.status_code == 200:
+                            registros = historico_resp.json().get("veiculos", [])
                             try:
                                 for item in registros:
                                     item["dt"] = datetime.datetime.strptime(item["server_time"], "%d/%m/%Y %H:%M:%S")
                                 registros = sorted(registros, key=lambda x: x["dt"])
-                            except Exception as e:
-                                st.error(f"Erro com datas para {vehicle_name}: {e}")
-                                continue
-
-                            total_distance = 0
-                            tempo_ignicao_ligada = datetime.timedelta()
-                            velocidades = []
-                            velocidade_maxima = 0
+                            except:
+                                registros = []
 
                             for i in range(1, len(registros)):
                                 prev = registros[i - 1]
                                 curr = registros[i]
-
                                 lat1, lon1 = float(prev["latitude"]), float(prev["longitude"])
                                 lat2, lon2 = float(curr["latitude"]), float(curr["longitude"])
+                                total_distance += haversine(lon1, lat1, lon2, lat2)
 
-                                # Verificações de ignição (tratando como string ou bool)
-                                ign_prev = str(prev.get("attributes", {}).get("ignition", "false")).lower() == "true"
-                                ign_curr = str(curr.get("attributes", {}).get("ignition", "false")).lower() == "true"
+                                vel = float(curr.get("velocidade", 0))
+                                velocidades.append(vel)
+                                velocidade_maxima = max(velocidade_maxima, vel)
 
-                                # Tempo entre dois pontos com ignição ligada
-                                if ign_prev and ign_curr and curr["dt"] > prev["dt"]:
-                                    tempo_ignicao_ligada += curr["dt"] - prev["dt"]
-                                    total_distance += haversine(lon1, lat1, lon2, lat2)
-                                    vel = float(curr.get("velocidade", 0))
-                                    velocidades.append(vel)
-                                    velocidade_maxima = max(velocidade_maxima, vel)
+                        # ALERTAS PARA TEMPO LIGADO
+                        alertas_url = "http://teresinagps.rastrosystem.com.br/api_v2/get-alertas/"
+                        alertas_data = {"veiculo_id": vehicle_id}
+                        alertas_resp = requests.post(alertas_url, headers=headers, json=alertas_data)
 
-                            velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
-                            consumo_litros = total_distance / km_por_litro if km_por_litro > 0 else 0
-                            custo = consumo_litros * preco_combustivel
+                        tempo_ignicao_ligada = datetime.timedelta()
+                        if alertas_resp.status_code == 200:
+                            alertas = alertas_resp.json().get("alertas", [])
+                            alertas_ign = [a for a in alertas if a.get("new_type") in ("acc_on", "acc_off")]
 
-                            resultados.append({
-                                "Veículo": vehicle_name,
-                                "Distância (km)": round(total_distance, 2),
-                                "Tempo": str(tempo_ignicao_ligada),
-                                "Velocidade Média (km/h)": velocidade_media,
-                                "Velocidade Máxima (km/h)": velocidade_maxima,
-                                "Km/L": km_por_litro,
-                                "Consumo (L)": round(consumo_litros, 2),
-                                "Custo (R$)": round(custo, 2)
-                            })
+                            # Ordenar por data de criação
+                            alertas_ign.sort(key=lambda x: x["criado"])
+
+                            acc_on = None
+                            for alerta in alertas_ign:
+                                tipo = alerta.get("new_type")
+                                data = alerta.get("criado")
+
+                                try:
+                                    dt = datetime.datetime.fromisoformat(data.replace("Z", "+00:00"))
+                                except:
+                                    continue
+
+                                if tipo == "acc_on":
+                                    acc_on = dt
+                                elif tipo == "acc_off" and acc_on:
+                                    if acc_on.date() == date_input:
+                                        tempo_ignicao_ligada += dt - acc_on
+                                    acc_on = None
+
+                        velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
+                        consumo_litros = total_distance / km_por_litro if km_por_litro > 0 else 0
+                        custo = consumo_litros * preco_combustivel
+
+                        resultados.append({
+                            "Veículo": vehicle_name,
+                            "Distância (km)": round(total_distance, 2),
+                            "Tempo": str(tempo_ignicao_ligada),
+                            "Velocidade Média (km/h)": velocidade_media,
+                            "Velocidade Máxima (km/h)": velocidade_maxima,
+                            "Km/L": km_por_litro,
+                            "Consumo (L)": round(consumo_litros, 2),
+                            "Custo (R$)": round(custo, 2)
+                        })
 
                         progress_bar.progress((idx + 1) / total)
 
