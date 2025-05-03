@@ -19,7 +19,7 @@ st.title("Relatório de Veículos - Rastro System")
 st.sidebar.header("Credenciais API")
 username = st.sidebar.text_input("Login")
 password = st.sidebar.text_input("Senha", type="password")
-user_id = st.sidebar.text_input("ID do Usuário (obrigatório)", value="")
+user_id = st.sidebar.text_input("ID do Usuário (opcional)", value="")
 app_number = 4
 
 st.sidebar.header("Configurações do Relatório")
@@ -43,11 +43,8 @@ if st.sidebar.button("Gerar Relatório"):
         if not token:
             st.error("Token não retornado.")
         else:
-            usuario_id = user_id.strip()
-            if not usuario_id:
-                st.error("ID do Usuário é obrigatório para buscar notificações.")
-                st.stop()
-
+            usuario_id = user_id if user_id.strip() != "" else str(login_json.get("id"))
+            st.info(f"ID do usuário: {usuario_id}")
             veiculos_url = f"http://teresinagps.rastrosystem.com.br/api_v2/veiculos/{usuario_id}/"
             headers = {"Authorization": f"token {token}"}
             veiculos_resp = requests.get(veiculos_url, headers=headers)
@@ -60,18 +57,15 @@ if st.sidebar.button("Gerar Relatório"):
                     st.warning("Nenhum veículo encontrado.")
                 else:
                     resultados = []
-                    data_consulta = date_input.strftime("%Y-%m-%d")
                     progress_bar = st.progress(0)
                     status_text = st.empty()
-
                     total = len(dispositivos)
+
                     for idx, dispositivo in enumerate(dispositivos):
                         vehicle_name = dispositivo.get("name", "Sem Nome")
-                        placa = dispositivo.get("placa", "")
                         vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
-                        # 1. BUSCAR HISTÓRICO PARA DISTÂNCIA
                         historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                         historico_data = {
                             "data": date_input.strftime("%d/%m/%Y"),
@@ -79,12 +73,12 @@ if st.sidebar.button("Gerar Relatório"):
                             "hora_fim": hora_fim,
                             "veiculo": vehicle_id
                         }
-                        historico_resp = requests.post(historico_url, headers=headers, json=historico_data)
 
                         total_distance = 0
                         velocidades = []
                         velocidade_maxima = 0
 
+                        historico_resp = requests.post(historico_url, headers=headers, json=historico_data)
                         if historico_resp.status_code == 200:
                             registros = historico_resp.json().get("veiculos", [])
                             try:
@@ -105,42 +99,23 @@ if st.sidebar.button("Gerar Relatório"):
                                 velocidades.append(vel)
                                 velocidade_maxima = max(velocidade_maxima, vel)
 
-                        # 2. BUSCAR NOTIFICAÇÕES PARA TEMPO LIGADO
-                        notificacoes_url = f"http://teresinagps.rastrosystem.com.br/api_v2/get-user-notifications/{usuario_id}"
-                        notificacoes_resp = requests.get(notificacoes_url, headers=headers)
-
-                        tempo_ignicao_ligada = datetime.timedelta()
-                        if notificacoes_resp.status_code == 200:
-                            eventos = notificacoes_resp.json()
-                            eventos_placa = [e for e in eventos if placa in e.get("title", "") and "ignição" in e.get("title", "").lower()]
-                            eventos_placa.sort(key=lambda x: x["criado"])
-
-                            acc_on = None
-                            for ev in eventos_placa:
-                                msg = ev.get("message", "").lower()
-                                data = ev.get("criado")
-                                try:
-                                    dt = datetime.datetime.fromisoformat(data.replace("Z", "+00:00"))
-                                except:
-                                    continue
-
-                                if dt.date() != date_input:
-                                    continue
-
-                                if "ligada" in msg:
-                                    acc_on = dt
-                                elif "desligada" in msg and acc_on:
-                                    tempo_ignicao_ligada += dt - acc_on
-                                    acc_on = None
-
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
+
+                        # Tempo estimado com base em distância e velocidade média
+                        if velocidade_media > 0:
+                            tempo_horas = total_distance / velocidade_media
+                            tempo_segundos = int(tempo_horas * 3600)
+                            tempo_estimado = datetime.timedelta(seconds=tempo_segundos)
+                        else:
+                            tempo_estimado = datetime.timedelta()
+
                         consumo_litros = total_distance / km_por_litro if km_por_litro > 0 else 0
                         custo = consumo_litros * preco_combustivel
 
                         resultados.append({
                             "Veículo": vehicle_name,
                             "Distância (km)": round(total_distance, 2),
-                            "Tempo": str(tempo_ignicao_ligada),
+                            "Tempo": str(tempo_estimado),
                             "Velocidade Média (km/h)": velocidade_media,
                             "Velocidade Máxima (km/h)": velocidade_maxima,
                             "Km/L": km_por_litro,
