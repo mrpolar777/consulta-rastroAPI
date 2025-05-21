@@ -63,6 +63,7 @@ if st.sidebar.button("Gerar Relatório"):
 
                     for idx, dispositivo in enumerate(dispositivos):
                         vehicle_name = dispositivo.get("name", "Sem Nome")
+                        placa = dispositivo.get("placa", "Não informada")
                         vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
@@ -101,7 +102,6 @@ if st.sidebar.button("Gerar Relatório"):
 
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
 
-                        # Tempo estimado com base em distância e velocidade média
                         if velocidade_media > 0:
                             tempo_horas = total_distance / velocidade_media
                             tempo_segundos = int(tempo_horas * 3600)
@@ -114,6 +114,7 @@ if st.sidebar.button("Gerar Relatório"):
 
                         resultados.append({
                             "Veículo": vehicle_name,
+                            "Placa": placa,
                             "Distância (km)": round(total_distance, 2),
                             "Tempo": str(tempo_estimado),
                             "Velocidade Média (km/h)": velocidade_media,
@@ -130,6 +131,7 @@ if st.sidebar.button("Gerar Relatório"):
                     df = pd.DataFrame(resultados)
                     colunas_ordenadas = [
                         "Veículo",
+                        "Placa",
                         "Distância (km)",
                         "Tempo",
                         "Velocidade Média (km/h)",
