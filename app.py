@@ -5,7 +5,6 @@ import math
 import pandas as pd
 import io
 
-# Função para calcular distância entre dois pontos geográficos
 def haversine(lon1, lat1, lon2, lat2):
     R = 6371
     dlon = math.radians(lon2 - lon1)
@@ -14,14 +13,9 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
-# Carrega a planilha com nomes corretos dos veículos
-relacao_path = "Relação Rotas e Rastreador.xlsx"
-relacao_df = pd.read_excel(relacao_path)
-placa_para_nome = relacao_df.dropna(subset=["Placa"]).drop_duplicates("Placa").set_index("Placa")["Veículo"].to_dict()
-
-# Interface do Streamlit
 st.title("Relatório de Veículos - Rastro System")
 
+# Sidebar
 st.sidebar.header("Credenciais API")
 username = st.sidebar.text_input("Login")
 password = st.sidebar.text_input("Senha", type="password")
@@ -68,9 +62,8 @@ if st.sidebar.button("Gerar Relatório"):
                     total = len(dispositivos)
 
                     for idx, dispositivo in enumerate(dispositivos):
+                        vehicle_name = dispositivo.get("name", "Sem Nome")
                         placa = dispositivo.get("placa", "Não informada")
-                        # Substitui o nome do veículo baseado na placa, priorizando a planilha
-                        vehicle_name = placa_para_nome.get(placa, f"{dispositivo.get('name', 'Sem Nome')} (sem correspondência)")
                         vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
