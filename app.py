@@ -69,7 +69,8 @@ if st.sidebar.button("Gerar Relatório"):
 
                     for idx, dispositivo in enumerate(dispositivos):
                         placa = dispositivo.get("placa", "Não informada")
-                        vehicle_name = placa_para_nome.get(placa, dispositivo.get("name", "Sem Nome"))
+                        # Substitui o nome do veículo baseado na placa, priorizando a planilha
+                        vehicle_name = placa_para_nome.get(placa, f"{dispositivo.get('name', 'Sem Nome')} (sem correspondência)")
                         vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
