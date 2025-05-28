@@ -4,6 +4,7 @@ import datetime
 import math
 import pandas as pd
 import io
+import time
 
 def haversine(lon1, lat1, lon2, lat2):
     R = 6371
@@ -13,9 +14,20 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+def is_on_br(lat, lon):
+    url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
+    try:
+        response = requests.get(url, headers={"User-Agent": "BRCheckApp"})
+        if response.status_code == 200:
+            data = response.json()
+            road = data.get("address", {}).get("road", "")
+            return "BR-" in road.upper()
+    except:
+        pass
+    return False
+
 st.title("Relatório de Veículos - Rastro System")
 
-# Sidebar
 st.sidebar.header("Credenciais API")
 username = st.sidebar.text_input("Login")
 password = st.sidebar.text_input("Senha", type="password")
@@ -78,6 +90,8 @@ if st.sidebar.button("Gerar Relatório"):
                         total_distance = 0
                         velocidades = []
                         velocidade_maxima = 0
+                        br_velocidades = []
+                        br_max = 0
 
                         historico_resp = requests.post(historico_url, headers=headers, json=historico_data)
                         if historico_resp.status_code == 200:
@@ -100,7 +114,13 @@ if st.sidebar.button("Gerar Relatório"):
                                 velocidades.append(vel)
                                 velocidade_maxima = max(velocidade_maxima, vel)
 
+                                if is_on_br(lat2, lon2):
+                                    br_velocidades.append(vel)
+                                    br_max = max(br_max, vel)
+                                    time.sleep(1)
+
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
+                        vel_media_br = round(sum(br_velocidades) / len(br_velocidades), 1) if br_velocidades else 0
 
                         if velocidade_media > 0:
                             tempo_horas = total_distance / velocidade_media
@@ -119,6 +139,8 @@ if st.sidebar.button("Gerar Relatório"):
                             "Tempo": str(tempo_estimado),
                             "Velocidade Média (km/h)": velocidade_media,
                             "Velocidade Máxima (km/h)": velocidade_maxima,
+                            "Velocidade Média BR (km/h)": vel_media_br,
+                            "Velocidade Máxima BR (km/h)": br_max,
                             "Km/L": km_por_litro,
                             "Consumo (L)": round(consumo_litros, 2),
                             "Custo (R$)": round(custo, 2)
@@ -130,15 +152,10 @@ if st.sidebar.button("Gerar Relatório"):
 
                     df = pd.DataFrame(resultados)
                     colunas_ordenadas = [
-                        "Veículo",
-                        "Placa",
-                        "Distância (km)",
-                        "Tempo",
-                        "Velocidade Média (km/h)",
-                        "Velocidade Máxima (km/h)",
-                        "Km/L",
-                        "Consumo (L)",
-                        "Custo (R$)"
+                        "Veículo", "Placa", "Distância (km)", "Tempo",
+                        "Velocidade Média (km/h)", "Velocidade Máxima (km/h)",
+                        "Velocidade Média BR (km/h)", "Velocidade Máxima BR (km/h)",
+                        "Km/L", "Consumo (L)", "Custo (R$)"
                     ]
                     df = df[colunas_ordenadas]
 
