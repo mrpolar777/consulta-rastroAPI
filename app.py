@@ -6,6 +6,9 @@ import pandas as pd
 import io
 import time
 
+# Cache de coordenadas já verificadas
+br_cache = {}
+
 def haversine(lon1, lat1, lon2, lat2):
     R = 6371
     dlon = math.radians(lon2 - lon1)
@@ -15,15 +18,21 @@ def haversine(lon1, lat1, lon2, lat2):
     return R * c
 
 def is_on_br(lat, lon):
+    key = f"{round(lat, 4)},{round(lon, 4)}"
+    if key in br_cache:
+        return br_cache[key]
     url = f"https://nominatim.openstreetmap.org/reverse?lat={lat}&lon={lon}&format=json"
     try:
         response = requests.get(url, headers={"User-Agent": "BRCheckApp"})
         if response.status_code == 200:
-            data = response.json()
-            road = data.get("address", {}).get("road", "")
-            return "BR-" in road.upper()
+            road = response.json().get("address", {}).get("road", "")
+            is_br = "BR-" in road.upper()
+            br_cache[key] = is_br
+            time.sleep(1)
+            return is_br
     except:
         pass
+    br_cache[key] = False
     return False
 
 st.title("Relatório de Veículos - Rastro System")
@@ -117,7 +126,6 @@ if st.sidebar.button("Gerar Relatório"):
                                 if is_on_br(lat2, lon2):
                                     br_velocidades.append(vel)
                                     br_max = max(br_max, vel)
-                                    time.sleep(1)
 
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
                         vel_media_br = round(sum(br_velocidades) / len(br_velocidades), 1) if br_velocidades else 0
