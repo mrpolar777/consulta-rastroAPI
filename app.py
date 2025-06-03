@@ -23,7 +23,8 @@ user_id = st.sidebar.text_input("ID do Usuário (opcional)", value="")
 app_number = 4
 
 st.sidebar.header("Configurações do Relatório")
-date_input = st.sidebar.date_input("Data", datetime.date.today())
+start_date = st.sidebar.date_input("Data Inicial", datetime.date.today())
+end_date = st.sidebar.date_input("Data Final", datetime.date.today())
 hora_ini = st.sidebar.text_input("Hora Início", "00:00:00")
 hora_fim = st.sidebar.text_input("Hora Fim", "23:59:59")
 km_por_litro = st.sidebar.number_input("Km/L", min_value=0.1, value=3.0, step=0.1)
@@ -67,38 +68,43 @@ if st.sidebar.button("Gerar Relatório"):
                         vehicle_id = dispositivo.get("veiculo_id")
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
-                        historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
-                        historico_data = {
-                            "data": date_input.strftime("%d/%m/%Y"),
-                            "hora_ini": hora_ini,
-                            "hora_fim": hora_fim,
-                            "veiculo": vehicle_id
-                        }
-
                         total_distance = 0
                         velocidades = []
                         velocidade_maxima = 0
 
-                        historico_resp = requests.post(historico_url, headers=headers, json=historico_data)
-                        if historico_resp.status_code == 200:
-                            registros = historico_resp.json().get("veiculos", [])
-                            try:
-                                for item in registros:
-                                    item["dt"] = datetime.datetime.strptime(item["server_time"], "%d/%m/%Y %H:%M:%S")
-                                registros = sorted(registros, key=lambda x: x["dt"])
-                            except:
-                                registros = []
+                        current_date = start_date
 
-                            for i in range(1, len(registros)):
-                                prev = registros[i - 1]
-                                curr = registros[i]
-                                lat1, lon1 = float(prev["latitude"]), float(prev["longitude"])
-                                lat2, lon2 = float(curr["latitude"]), float(curr["longitude"])
-                                total_distance += haversine(lon1, lat1, lon2, lat2)
+                        while current_date <= end_date:
+                            historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
+                            historico_data = {
+                                "data": current_date.strftime("%d/%m/%Y"),
+                                "hora_ini": hora_ini,
+                                "hora_fim": hora_fim,
+                                "veiculo": vehicle_id
+                            }
+                            historico_resp = requests.post(historico_url, headers=headers, json=historico_data)
 
-                                vel = float(curr.get("velocidade", 0))
-                                velocidades.append(vel)
-                                velocidade_maxima = max(velocidade_maxima, vel)
+                            if historico_resp.status_code == 200:
+                                registros = historico_resp.json().get("veiculos", [])
+                                try:
+                                    for item in registros:
+                                        item["dt"] = datetime.datetime.strptime(item["server_time"], "%d/%m/%Y %H:%M:%S")
+                                    registros = sorted(registros, key=lambda x: x["dt"])
+                                except:
+                                    registros = []
+
+                                for i in range(1, len(registros)):
+                                    prev = registros[i - 1]
+                                    curr = registros[i]
+                                    lat1, lon1 = float(prev["latitude"]), float(prev["longitude"])
+                                    lat2, lon2 = float(curr["latitude"]), float(curr["longitude"])
+                                    total_distance += haversine(lon1, lat1, lon2, lat2)
+
+                                    vel = float(curr.get("velocidade", 0))
+                                    velocidades.append(vel)
+                                    velocidade_maxima = max(velocidade_maxima, vel)
+
+                            current_date += datetime.timedelta(days=1)
 
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
 
