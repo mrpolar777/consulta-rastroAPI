@@ -13,6 +13,24 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+tipos_veiculo = {
+    "1": "Automóvel",
+    "3": "Van",
+    "7": "Ônibus",
+    "12": "Micro-ônibus"
+}
+
+def identificar_tipo_frota(nome):
+    nome_lower = nome.lower()
+    if "própria" in nome_lower:
+        return "Própria"
+    elif "terceir" in nome_lower or "locadora" in nome_lower:
+        return "Terceira"
+    elif "subloc" in nome_lower or "sub" in nome_lower:
+        return "Sublocada"
+    else:
+        return "Não Informada"
+
 st.title("Relatório de Veículos - Rastro System")
 
 # Sidebar
@@ -66,6 +84,10 @@ if st.sidebar.button("Gerar Relatório"):
                         vehicle_name = dispositivo.get("name", "Sem Nome")
                         placa = dispositivo.get("placa", "Não informada")
                         vehicle_id = dispositivo.get("veiculo_id")
+                        tipo_codigo = str(dispositivo.get("tipo", ""))
+                        tipo_veiculo = tipos_veiculo.get(tipo_codigo, "Desconhecido")
+                        tipo_frota = identificar_tipo_frota(vehicle_name)
+
                         status_text.text(f"Processando: {vehicle_name} ({idx + 1}/{total})")
 
                         total_distance = 0
@@ -73,7 +95,6 @@ if st.sidebar.button("Gerar Relatório"):
                         velocidade_maxima = 0
 
                         current_date = start_date
-
                         while current_date <= end_date:
                             historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                             historico_data = {
@@ -121,6 +142,8 @@ if st.sidebar.button("Gerar Relatório"):
                         resultados.append({
                             "Veículo": vehicle_name,
                             "Placa": placa,
+                            "Tipo de Veículo": tipo_veiculo,
+                            "Tipo de Frota": tipo_frota,
                             "Distância (km)": round(total_distance, 2),
                             "Tempo": str(tempo_estimado),
                             "Velocidade Média (km/h)": velocidade_media,
@@ -138,6 +161,8 @@ if st.sidebar.button("Gerar Relatório"):
                     colunas_ordenadas = [
                         "Veículo",
                         "Placa",
+                        "Tipo de Veículo",
+                        "Tipo de Frota",
                         "Distância (km)",
                         "Tempo",
                         "Velocidade Média (km/h)",
