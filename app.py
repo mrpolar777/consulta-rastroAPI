@@ -51,6 +51,7 @@ preco_combustivel = st.sidebar.number_input("Preço do Litro (R$)", min_value=0.
 if st.sidebar.button("Gerar Relatório"):
     login_url = "http://teresinagps.rastrosystem.com.br/api_v2/login/"
     login_data = {"login": username, "senha": password, "app": app_number}
+
     with st.spinner("Fazendo login..."):
         login_response = requests.post(login_url, data=login_data)
 
@@ -59,11 +60,12 @@ if st.sidebar.button("Gerar Relatório"):
     else:
         login_json = login_response.json()
         token = login_json.get("token")
+
         if not token:
             st.error("Token não retornado.")
         else:
             usuario_id = user_id if user_id.strip() != "" else str(login_json.get("id"))
-            st.info(f"ID do usuário: {usuario_id}")
+
             veiculos_url = f"http://teresinagps.rastrosystem.com.br/api_v2/veiculos/{usuario_id}/"
             headers = {"Authorization": f"token {token}"}
             veiculos_resp = requests.get(veiculos_url, headers=headers)
@@ -73,14 +75,18 @@ if st.sidebar.button("Gerar Relatório"):
             else:
                 dispositivos = veiculos_resp.json().get("dispositivos", [])
                 if not dispositivos:
-                    st.warning("Nenhum veículo encontrado.")
-                else:
-                    resultados = []
-                    progress_bar = st.progress(0)
-                    status_text = st.empty()
-                    total = len(dispositivos)
+                    st.error("Nenhum veículo encontrado.")
+                    st.stop()
 
-                    for idx, dispositivo in enumerate(dispositivos):
+                resultados = []
+                erros_processamento = []
+                logs_internos = []
+                progress_bar = st.progress(0)
+                status_text = st.empty()
+                total = len(dispositivos)
+
+                for idx, dispositivo in enumerate(dispositivos):
+                    try:
                         vehicle_name = dispositivo.get("name", "Sem Nome")
                         placa = dispositivo.get("placa", "Não informada")
                         vehicle_id = dispositivo.get("veiculo_id")
@@ -93,8 +99,9 @@ if st.sidebar.button("Gerar Relatório"):
                         total_distance = 0
                         velocidades = []
                         velocidade_maxima = 0
-
                         current_date = start_date
+                        registros_totais = 0
+
                         while current_date <= end_date:
                             historico_url = "http://teresinagps.rastrosystem.com.br/api_v2/veiculo/historico/"
                             historico_data = {
@@ -107,34 +114,34 @@ if st.sidebar.button("Gerar Relatório"):
 
                             if historico_resp.status_code == 200:
                                 registros = historico_resp.json().get("veiculos", [])
+                                registros_totais += len(registros)
+
                                 try:
                                     for item in registros:
                                         item["dt"] = datetime.datetime.strptime(item["server_time"], "%d/%m/%Y %H:%M:%S")
                                     registros = sorted(registros, key=lambda x: x["dt"])
-                                except:
+                                except Exception as e:
+                                    logs_internos.append(f"{vehicle_name}: erro ao processar datas - {e}")
                                     registros = []
 
                                 for i in range(1, len(registros)):
-                                    prev = registros[i - 1]
-                                    curr = registros[i]
-                                    lat1, lon1 = float(prev["latitude"]), float(prev["longitude"])
-                                    lat2, lon2 = float(curr["latitude"]), float(curr["longitude"])
-                                    total_distance += haversine(lon1, lat1, lon2, lat2)
+                                    try:
+                                        lat1, lon1 = float(registros[i - 1]["latitude"]), float(registros[i - 1]["longitude"])
+                                        lat2, lon2 = float(registros[i]["latitude"]), float(registros[i]["longitude"])
+                                        total_distance += haversine(lon1, lat1, lon2, lat2)
 
-                                    vel = float(curr.get("velocidade", 0))
-                                    velocidades.append(vel)
-                                    velocidade_maxima = max(velocidade_maxima, vel)
+                                        vel = float(registros[i].get("velocidade", 0))
+                                        velocidades.append(vel)
+                                        velocidade_maxima = max(velocidade_maxima, vel)
+                                    except:
+                                        logs_internos.append(f"{vehicle_name}: coordenadas inválidas em {current_date.strftime('%d/%m/%Y')}")
+                            else:
+                                logs_internos.append(f"{vehicle_name}: erro histórico em {current_date.strftime('%d/%m/%Y')}")
 
                             current_date += datetime.timedelta(days=1)
 
                         velocidade_media = round(sum(velocidades) / len(velocidades), 1) if velocidades else 0
-
-                        if velocidade_media > 0:
-                            tempo_horas = total_distance / velocidade_media
-                            tempo_segundos = int(tempo_horas * 3600)
-                            tempo_estimado = datetime.timedelta(seconds=tempo_segundos)
-                        else:
-                            tempo_estimado = datetime.timedelta()
+                        tempo_em_horas = round(total_distance / velocidade_media, 2) if velocidade_media > 0 else 0
 
                         consumo_litros = total_distance / km_por_litro if km_por_litro > 0 else 0
                         custo = consumo_litros * preco_combustivel
@@ -145,7 +152,7 @@ if st.sidebar.button("Gerar Relatório"):
                             "Tipo de Veículo": tipo_veiculo,
                             "Tipo de Frota": tipo_frota,
                             "Distância (km)": round(total_distance, 2),
-                            "Tempo": str(tempo_estimado),
+                            "Tempo (h)": tempo_em_horas,
                             "Velocidade Média (km/h)": velocidade_media,
                             "Velocidade Máxima (km/h)": velocidade_maxima,
                             "Km/L": km_por_litro,
@@ -153,37 +160,38 @@ if st.sidebar.button("Gerar Relatório"):
                             "Custo (R$)": round(custo, 2)
                         })
 
-                        progress_bar.progress((idx + 1) / total)
+                    except Exception as e:
+                        erros_processamento.append(f"{dispositivo.get('name', 'Sem nome')} - {str(e)}")
 
-                    status_text.text("Relatório finalizado com sucesso!")
+                    progress_bar.progress((idx + 1) / total)
 
-                    df = pd.DataFrame(resultados)
-                    colunas_ordenadas = [
-                        "Veículo",
-                        "Placa",
-                        "Tipo de Veículo",
-                        "Tipo de Frota",
-                        "Distância (km)",
-                        "Tempo",
-                        "Velocidade Média (km/h)",
-                        "Velocidade Máxima (km/h)",
-                        "Km/L",
-                        "Consumo (L)",
-                        "Custo (R$)"
-                    ]
-                    df = df[colunas_ordenadas]
+                status_text.text("✅ Relatório finalizado.")
 
-                    st.write("Relatório Gerado com Sucesso", df)
+                if not resultados:
+                    st.error("Nenhum dado processado com sucesso.")
+                    st.stop()
 
+                df = pd.DataFrame(resultados)
+                colunas_ordenadas = [
+                    "Veículo", "Placa", "Tipo de Veículo", "Tipo de Frota",
+                    "Distância (km)", "Tempo (h)", "Velocidade Média (km/h)",
+                    "Velocidade Máxima (km/h)", "Km/L", "Consumo (L)", "Custo (R$)"
+                ]
+                df = df[colunas_ordenadas]
+
+                st.success("✅ Relatório gerado com sucesso!")
+                st.dataframe(df)
+
+                try:
                     output = io.BytesIO()
                     with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
                         df.to_excel(writer, index=False, sheet_name='Relatório')
                     output.seek(0)
-                    xlsx_data = output.getvalue()
-
                     st.download_button(
-                        label="Baixar Excel",
-                        data=xlsx_data,
+                        label="📥 Baixar Excel",
+                        data=output,
                         file_name="relatorio_veiculos.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                     )
+                except Exception as e:
+                    st.error(f"Erro ao gerar o Excel: {e}")
