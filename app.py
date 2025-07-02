@@ -182,7 +182,7 @@ if st.sidebar.button("Gerar Relatório"):
                 df = pd.DataFrame(resultados)
                 colunas_ordenadas = [
                     "Veículo", "Placa", "Tipo de Veículo", "Tipo de Frota",
-                    "Distância (km)", "Tempo formatado", "Velocidade Média (km/h)",
+                    "Distância (km)", "Tempo (HH:MM:SS)", "Velocidade Média (km/h)",
                     "Velocidade Máxima (km/h)", "Km/L", "Consumo (L)", "Custo (R$)"
                 ]
                 df = df[colunas_ordenadas]
