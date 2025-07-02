@@ -13,6 +13,13 @@ def haversine(lon1, lat1, lon2, lat2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+def horas_para_tempo_formatado(horas_float):
+    total_segundos = int(horas_float * 3600)
+    horas = total_segundos // 3600
+    minutos = (total_segundos % 3600) // 60
+    segundos = total_segundos % 60
+    return f"{horas:02d}:{minutos:02d}:{segundos:02d}"
+
 tipos_veiculo = {
     "1": "Automóvel",
     "3": "Van",
@@ -152,7 +159,8 @@ if st.sidebar.button("Gerar Relatório"):
                             "Tipo de Veículo": tipo_veiculo,
                             "Tipo de Frota": tipo_frota,
                             "Distância (km)": round(total_distance, 2),
-                            "Tempo (h)": tempo_em_horas,
+                            "Tempo (h)": round(tempo_em_horas, 2),
+                            "Tempo formatado": horas_para_tempo_formatado(tempo_em_horas),
                             "Velocidade Média (km/h)": velocidade_media,
                             "Velocidade Máxima (km/h)": velocidade_maxima,
                             "Km/L": km_por_litro,
@@ -174,7 +182,7 @@ if st.sidebar.button("Gerar Relatório"):
                 df = pd.DataFrame(resultados)
                 colunas_ordenadas = [
                     "Veículo", "Placa", "Tipo de Veículo", "Tipo de Frota",
-                    "Distância (km)", "Tempo (h)", "Velocidade Média (km/h)",
+                    "Distância (km)", "Tempo formatado", "Velocidade Média (km/h)",
                     "Velocidade Máxima (km/h)", "Km/L", "Consumo (L)", "Custo (R$)"
                 ]
                 df = df[colunas_ordenadas]
