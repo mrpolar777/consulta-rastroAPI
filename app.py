@@ -159,8 +159,7 @@ if st.sidebar.button("Gerar Relatório"):
                             "Tipo de Veículo": tipo_veiculo,
                             "Tipo de Frota": tipo_frota,
                             "Distância (km)": round(total_distance, 2),
-                            "Tempo (h)": round(tempo_em_horas, 2),
-                            "Tempo formatado": horas_para_tempo_formatado(tempo_em_horas),
+                            "Tempo": horas_para_tempo_formatado(tempo_em_horas),
                             "Velocidade Média (km/h)": velocidade_media,
                             "Velocidade Máxima (km/h)": velocidade_maxima,
                             "Km/L": km_por_litro,
@@ -182,7 +181,7 @@ if st.sidebar.button("Gerar Relatório"):
                 df = pd.DataFrame(resultados)
                 colunas_ordenadas = [
                     "Veículo", "Placa", "Tipo de Veículo", "Tipo de Frota",
-                    "Distância (km)", "Tempo (HH:MM:SS)", "Velocidade Média (km/h)",
+                    "Distância (km)", "Tempo", "Velocidade Média (km/h)",
                     "Velocidade Máxima (km/h)", "Km/L", "Consumo (L)", "Custo (R$)"
                 ]
                 df = df[colunas_ordenadas]
